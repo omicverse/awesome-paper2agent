@@ -35,7 +35,8 @@ SECRET = re.compile(
     r'|\bsk-(?:proj-|ant-|live-)?[A-Za-z0-9]{24,}\b'                            # OpenAI / Anthropic
     r'|\bAIza[0-9A-Za-z_-]{35}\b'                                               # Google API key
     r'|\b(?:AKIA|ASIA)[0-9A-Z]{16}\b'                                           # AWS access key id
-    r'|\bglpat-[A-Za-z0-9_-]{20,}\b|\bnpm_[A-Za-z0-9]{36}\b|\bhf_[A-Za-z0-9]{30,}\b',
+    r'|\bglpat-[A-Za-z0-9_-]{20,}\b|\bnpm_[A-Za-z0-9]{36}\b|\bhf_[A-Za-z0-9]{30,}\b'
+    r'|\b[a-z][a-z0-9+.-]*://[^\s"\'/@]+:[^\s"\'/@]{6,}@',            # user:secret@host connection strings
     re.I,
 )
 
@@ -53,6 +54,7 @@ PLACEHOLDER = re.compile(r'your|example|placeholder|changeme|redact|dummy|sample
 PRIVATE = re.compile(
     r'/Users/[^/\s]+/|/home/[^/\s]+/|file://'
     r'|[A-Za-z]:\\+Users\\|[A-Za-z]:\\+Documents and Settings\\|%USERPROFILE%'
+    r'|metadata\.google\.internal|metadata\.goog\b|169\.254\.170\.2|\[?fd00:ec2::254\]?'
     r'|(?<![\w.-])(?:localhost|0\.0\.0\.0|\[::1\]|::1)(?!\.[A-Za-z0-9])'
     r'|(?<![\d.])127\.\d{1,3}\.\d{1,3}\.\d{1,3}(?!\.?\d)'
     r'|(?<![\d.])10\.\d{1,3}\.\d{1,3}\.\d{1,3}(?!\.?\d)'
@@ -65,14 +67,21 @@ PRIVATE = re.compile(
 
 
 def find_sensitive(text: str):
-    """First credential or machine-local reference in `text`, else None."""
-    match = SECRET.search(text)
+    """First credential or machine-local reference in `text`, else None.
+
+    Adjacent string literals are joined before matching: a long token split across
+    `"ghp_" "AAAA…"` by a formatter or an agent otherwise slips past both the prefix
+    rule and the assignment rule.
+    """
+    joined = re.sub(r'(["\'])\s*\1', '', text) if '" "' in text or "' '" in text else text
+    match = SECRET.search(joined) or SECRET.search(text)
     if match:
         return match.group(0)
-    for match in ASSIGNED_SECRET.finditer(text):
-        if not PLACEHOLDER.search(match.group(0)):
-            return match.group(0)
-    match = PRIVATE.search(text)
+    for source in (joined, text):
+        for match in ASSIGNED_SECRET.finditer(source):
+            if not PLACEHOLDER.search(match.group(0)):
+                return match.group(0)
+    match = PRIVATE.search(joined) or PRIVATE.search(text)
     return match.group(0) if match else None
 
 
@@ -89,8 +98,13 @@ def package_dirs(area: str):
     """Package directories of one area. Dot entries are ignored, stray files are rejected."""
     base = ROOT / area
     for entry in sorted(base.iterdir()):
-        if entry.name.startswith('.'):
+        if entry.name == '.gitkeep':
             continue
+        if entry.name.startswith('.'):
+            raise ValueError(
+                f'{area}/{entry.name}: dot entries are not validated, so they must not exist '
+                'here (a stash of files under packages/ can carry anything past review)'
+            )
         if not entry.is_dir():
             raise ValueError(f'{area}/{entry.name}: expected a package directory, found a file')
         yield entry
@@ -103,8 +117,20 @@ def validate(folder: Path, demo=False):
     Draft202012Validator(SCHEMA).validate(meta)
     if meta['package_id'] != folder.name or meta['demo'] != demo:
         raise ValueError('Directory identity or demo channel mismatch')
-    if not demo and ('pending' in meta['license'].lower()):
-        raise ValueError('License approval is pending')
+    if not demo:
+        if 'pending' in meta['license'].lower():
+            raise ValueError('License approval is pending')
+        license_text = read_text(folder / 'LICENSE')
+        lowered = license_text.lower()
+        for phrase in ('to be determined', 'redistribution prohibited', 'not authorized',
+                       'no license granted'):
+            if phrase in lowered:
+                raise ValueError(
+                    f'LICENSE says `{phrase}`; the declared license must permit redistribution '
+                    'of everything in the package'
+                )
+        if re.search(r'\bTBD\b|placeholder', license_text, re.I):
+            raise ValueError('LICENSE is a placeholder; it must be the real license text')
     files = []
     for p in sorted(folder.rglob('*')):
         rel = p.relative_to(folder).as_posix()
@@ -128,6 +154,7 @@ def validate(folder: Path, demo=False):
             raise ValueError(f'Potential secret/private information: {rel}')
         files.append((rel, data))
     names = {x for x, _ in files}
+    reject_case_collisions(names)
     if not {'USAGE.md', 'LICENSE', 'src/requirements.txt'}.issubset(names):
         raise ValueError('Missing USAGE, LICENSE or requirements')
     if len([n for n in names if re.fullmatch(r'src/[^/]+_mcp\.py', n)]) != 1:
@@ -140,6 +167,24 @@ def validate(folder: Path, demo=False):
     if not demo:
         _check_validation(folder, names, meta)
     return meta, files
+
+
+def reject_case_collisions(names) -> None:
+    """Two paths differing only by case collide on a case-insensitive filesystem.
+
+    macOS and Windows extractors keep one of them, so a package that looks complete here
+    silently loses a module there. The check runs on the names, not on the disk: a
+    case-insensitive filesystem cannot even create the pair to be checked.
+    """
+    folded: dict = {}
+    for name in sorted(names):
+        key = name.casefold()
+        if key in folded:
+            raise ValueError(
+                f'`{name}` and `{folded[key]}` differ only by case; extracting them on a '
+                'case-insensitive filesystem would silently drop one'
+            )
+        folded[key] = name
 
 
 def _check_validation(folder: Path, names: set, meta: dict) -> None:
@@ -196,7 +241,13 @@ def reviewed_catalog():
         seen.add(package_id)
         if not approval['reviewed_by'] or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', approval['reviewed_at']):
             raise ValueError('Review attribution/date required')
-        meta, data = archive(ROOT / 'packages' / package_id, False)
+        folder = ROOT / 'packages' / package_id
+        if not folder.is_dir():
+            raise ValueError(
+                f'reviews.json approves `{package_id}`, but packages/{package_id}/ does not '
+                'exist; remove the stale approval or restore the package'
+            )
+        meta, data = archive(folder, False)
         sha = hashlib.sha256(data).hexdigest()
         content = hashlib.sha256(json.dumps(meta, sort_keys=True, separators=(',', ':')).encode() + b'\n' + data).hexdigest()
         if approval['content_sha256'] != content or approval['package_version'] != meta['package_version']:

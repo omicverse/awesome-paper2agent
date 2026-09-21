@@ -137,11 +137,16 @@ class RobustnessTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'expected a package directory'):
             list(catalog.package_dirs('packages'))
 
-    def test_dot_entries_are_ignored(self):
+    def test_gitkeep_is_skipped_and_other_dot_entries_are_refused(self):
         self.ledger([])
-        (self.root / 'packages/.DS_Store').write_text('junk')
         (self.root / 'packages/.gitkeep').write_text('')
         self.assertEqual([p.name for p in catalog.package_dirs('packages')], ['sequence-stats'])
+        # A dot directory is never validated, so files parked in one reach a public PR
+        # unscanned. It must be refused rather than ignored.
+        (self.root / 'packages/.stash').mkdir()
+        (self.root / 'packages/.stash/creds.py').write_text('AWS_SECRET_ACCESS_KEY = "x"\n')
+        with self.assertRaisesRegex(ValueError, 'dot entries are not validated'):
+            list(catalog.package_dirs('packages'))
 
     def test_reads_utf8_under_a_non_utf8_locale(self):
         script = Path(catalog.__file__).resolve()
@@ -478,3 +483,75 @@ class FromPaper2McpTests(unittest.TestCase):
         r = self.run_converter('--commit', 'abc1234')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('--commit', r.stderr)
+
+
+class AuditFindingTests(unittest.TestCase):
+    """Regressions for the findings of an independent audit."""
+
+    def setUp(self):
+        from unittest.mock import patch
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.patch = patch.object(catalog, 'ROOT', self.root); self.patch.start()
+        (self.root / 'packages').mkdir(); (self.root / 'examples').mkdir()
+        shutil.copytree(ROOT / 'examples/sequence-stats', self.root / 'examples/sequence-stats')
+        self.folder = self.root / 'packages/sequence-stats'
+        shutil.copytree(ROOT / 'examples/sequence-stats', self.folder)
+        meta = json.loads((self.folder / 'metadata.json').read_text(encoding='utf-8'))
+        meta.update(demo=False, repo_url='https://github.com/example/source', commit='a' * 40,
+                    paper_title='Fixture', license='MIT')
+        (self.folder / 'metadata.json').write_text(json.dumps(meta), encoding='utf-8')
+        (self.folder / 'LICENSE').write_text('MIT License\n\nPermission is hereby granted...\n')
+        write_validation(self.folder)
+
+    def tearDown(self):
+        self.patch.stop(); self.tmp.cleanup()
+
+    def test_connection_string_credentials_are_rejected(self):
+        (self.folder / 'src/db.py').write_text(
+            'DSN = "postgresql://labuser:SuperSecret123@db.example.com:5432/lab"\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'secret/private'):
+            catalog.validate(self.folder, False)
+
+    def test_a_token_split_across_string_literals_is_rejected(self):
+        (self.folder / 'src/t.py').write_text(
+            'TOKEN = ("ghp_" "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8")\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'secret/private'):
+            catalog.validate(self.folder, False)
+
+    def test_cloud_metadata_hostnames_are_rejected(self):
+        (self.folder / 'src/m.py').write_text(
+            'URL = "http://metadata.google.internal/computeMetadata/v1/"\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'secret/private'):
+            catalog.validate(self.folder, False)
+
+    def test_a_placeholder_licence_file_is_rejected(self):
+        (self.folder / 'LICENSE').write_text('To be determined.\n')
+        with self.assertRaisesRegex(ValueError, 'LICENSE says'):
+            catalog.validate(self.folder, False)
+        (self.folder / 'LICENSE').write_text('Placeholder licence.\n')
+        with self.assertRaisesRegex(ValueError, 'placeholder'):
+            catalog.validate(self.folder, False)
+
+    def test_a_licence_that_forbids_redistribution_is_rejected(self):
+        (self.folder / 'LICENSE').write_text('All rights reserved. Redistribution prohibited.\n')
+        with self.assertRaisesRegex(ValueError, 'must permit redistribution'):
+            catalog.validate(self.folder, False)
+
+    def test_paths_that_differ_only_by_case_are_rejected(self):
+        # Checked on the names rather than on disk: a case-insensitive filesystem cannot
+        # even hold the colliding pair (the second write overwrites the first), which is
+        # the very hazard this guard exists for.
+        catalog.reject_case_collisions({'src/helper.py', 'src/requirements.txt'})
+        with self.assertRaisesRegex(ValueError, 'differ only by case'):
+            catalog.reject_case_collisions({'src/helper.py', 'src/Helper.py'})
+
+    def test_a_stale_approval_is_reported_not_crashed(self):
+        (self.root / 'reviews.json').write_text(json.dumps({
+            'schema_version': 1,
+            'approvals': [{'package_id': 'ghost', 'package_version': '0.1.0',
+                           'content_sha256': 'a' * 64, 'reviewed_by': 'someone',
+                           'reviewed_at': '2026-09-21'}]}), encoding='utf-8')
+        (self.root / 'packages/ghost').exists()
+        with self.assertRaisesRegex(ValueError, 'stale approval'):
+            catalog.validate_all(require_approved=True)

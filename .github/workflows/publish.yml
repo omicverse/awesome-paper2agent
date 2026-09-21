@@ -1,0 +1,71 @@
+name: Publish release
+
+# Publishing used to be done by hand, so nothing tied a release to a commit that had
+# passed the gates. Tags are the only trigger, and the job refuses a tag that is not on
+# main or whose packages lack an approval.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements-dev.txt
+
+      - name: The tagged commit must be on main
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          tagged=$(git rev-parse HEAD)
+          if ! git merge-base --is-ancestor "$tagged" FETCH_HEAD; then
+            echo "::error::${GITHUB_REF_NAME} ($tagged) is not an ancestor of main; refusing to publish"
+            exit 1
+          fi
+          echo "$tagged is on main"
+
+      - name: Install the validator
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      # Same reasoning as the pull-request gate: the tag carries its own copy of the
+      # validator, and a tag that neutered it must not be able to publish itself.
+      - name: Gate with the default branch's validator
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          git checkout FETCH_HEAD -- tools schema requirements-dev.txt
+          python tools/catalog.py validate --require-approved
+
+      - name: Restore the tagged tree, which must be clean to build from
+        run: |
+          set -euo pipefail
+          git checkout -f HEAD -- .
+          test -z "$(git status --porcelain)" || { echo "::error::working tree is dirty"; git status --porcelain; exit 1; }
+
+      - name: Build the catalog for this tag
+        run: python tools/catalog.py build --revision "$(git rev-parse HEAD)"
+
+      - name: Publish the assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/release/index.json dist/release/*.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/release/index.json dist/release/*.zip \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Built from $(git rev-parse HEAD) by the publish workflow, after the tagged commit passed the approval gate."
+          fi
