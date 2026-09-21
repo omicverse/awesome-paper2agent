@@ -1,0 +1,15 @@
+mcp==1.12.4
+scrublet==0.2.3
+anndata==0.13.2
+h5py==3.15.1
+numpy==2.4.6
+scipy==1.17.1
+pandas==3.0.3
+scikit-learn==1.8.0
+scikit-image==0.25.2
+matplotlib==3.10.9
+annoy==1.17.3
+umap-learn==0.5.11
+numba==0.65.1
+llvmlite==0.47.0
+cython==3.2.6
