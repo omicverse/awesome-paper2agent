@@ -3,13 +3,20 @@
 The build pipeline in OmicOS already produces the parts a package needs — a single
 `src/<repo>_mcp.py` entry point, pinned `src/requirements.txt`, recipient-facing
 `USAGE.md`, retained notices — plus the evidence that its tools were exercised:
-`reports/expected-mcp-tools.json` (the reconciled tool inventory) and
-`reports/mcp-acceptance-cases.json` (the calls the verifier ran).
+`reports/expected-mcp-tools.json` (the reconciled tool inventory),
+`reports/mcp-acceptance-cases.json` (the calls the verifier ran), and the two strict
+real-call reports `reports/mcp-project-environment.json` and
+`reports/mcp-clean-environment.json` that the pipeline's own completion gate requires,
+together with the extraction-acceptance record `reports/delivery-validation.json`.
 
 This script copies exactly that runtime set into `packages/<package_id>/`, writes the
 `metadata.json` the pipeline does not produce, and turns the acceptance cases into the
 `VALIDATION.md` this repository requires. It never copies tests, notebooks, reports,
-environments or build scratch into the package.
+environments or build scratch into the package. A delivery is refused when the pipeline
+route keeps non-Python runtime material under `src/` (the R route's
+`src/r_scripts/<module>.R`), or when the runtime report / acceptance-case / delivery
+evidence is missing, failed or inconsistent: catalog v1 packages are Python servers and
+must carry the verification record they advertise.
 """
 from __future__ import annotations
 
@@ -30,6 +37,8 @@ COMMIT = re.compile(r'^[a-f0-9]{40}$')
 DOI = re.compile(r'^10\.[0-9]{4,9}/\S*[A-Za-z0-9)]$')
 PACKAGE_ID = re.compile(r'^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$')
 VERSION = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+$')
+PYTHON = re.compile(r'^3\.[0-9]{1,2}$')
+RUNTIME_REPORTS = ('mcp-project-environment.json', 'mcp-clean-environment.json')
 
 
 def fail(message: str):
@@ -45,17 +54,53 @@ def read_json(path: Path, what: str):
         fail(f'{what} is not valid JSON: {path} ({exc})')
 
 
-def collect_runtime_files(project: Path) -> list:
-    """The runtime set only: sources, pinned requirements, USAGE, optional NOTICE."""
+def entry_point_file(project: Path) -> Path:
+    """The single src/*_mcp.py entry point the pipeline delivers."""
     src = project / 'src'
     if not src.is_dir():
         fail(f'no src/ directory in {project}')
     entry_points = sorted(p for p in src.glob('*_mcp.py') if p.is_file())
     if len(entry_points) != 1:
         fail(f'expected exactly one src/*_mcp.py in {src}, found {len(entry_points)}')
-    files = [(p, Path('src') / p.name) for p in entry_points]
+    return entry_points[0]
+
+
+def check_python_route(project: Path) -> None:
+    """Catalog v1 packages are Python; the pipeline's R route keeps src/r_scripts/<module>.R.
+
+    Copying only the Python files silently produced packages that could not run, so a
+    delivery with non-Python runtime material under src/ (or a recorded non-Python route)
+    is refused instead of converted.
+    """
+    src = project / 'src'
+    requirements = src / 'requirements.txt'
+    unexpected = []
+    for path in sorted(src.rglob('*')):
+        if not path.is_file() or path == requirements or path.suffix == '.py':
+            continue
+        parts = path.relative_to(src).parts
+        if any(part.startswith('.') or part == '__pycache__' for part in parts):
+            continue
+        unexpected.append(str(path.relative_to(project)))
+    if unexpected:
+        fail('catalog v1 packages ship Python only, but this delivery keeps non-Python '
+             'runtime material under src/: ' + ', '.join(unexpected))
+    language = project / '.pipeline/language.json'
+    if language.is_file():
+        record = read_json(language, 'the pipeline language record')
+        route = record.get('route') if isinstance(record, dict) else None
+        if route is not None and route != 'python':
+            fail(f'the pipeline recorded route {route!r}; catalog v1 packages are Python '
+                 'servers and the R/CLI routes cannot be converted by this importer')
+
+
+def collect_runtime_files(project: Path) -> list:
+    """The runtime set only: sources, pinned requirements, USAGE, optional NOTICE."""
+    src = project / 'src'
+    entry = entry_point_file(project)
+    files = [(entry, Path('src') / entry.name)]
     for p in sorted(src.rglob('*.py')):
-        if p != entry_points[0]:
+        if p != entry:
             files.append((p, Path('src') / p.relative_to(src)))
     requirements = src / 'requirements.txt'
     if not requirements.is_file():
@@ -68,6 +113,68 @@ def collect_runtime_files(project: Path) -> list:
     if not any(dest.name == 'USAGE.md' for _, dest in files):
         fail(f'no USAGE.md in {project}; the pipeline writes a recipient-facing one')
     return files
+
+
+def check_runtime_evidence(project: Path, entry: Path, tools, cases, python: str) -> dict:
+    """Require the strict real-call reports the pipeline's own completion gate requires.
+
+    `reports/mcp-acceptance-cases.json` alone is a plan; the environment reports are the
+    evidence that those calls ran in the project environment and in a clean environment
+    rebuilt from src/requirements.txt. The VALIDATION.md this importer writes claims
+    verifier evidence, so the evidence must exist and match the delivered files.
+    """
+    cases_by_name = {}
+    for case in cases:
+        name = case.get('name') if isinstance(case, dict) else None
+        if not isinstance(name, str) or name in cases_by_name:
+            fail('reports/mcp-acceptance-cases.json: every case needs a unique name')
+        cases_by_name[name] = case.get('tool')
+    covered = {case['tool'] for case in cases if 'error_contains' not in case}
+    missing_positive = [tool for tool in tools if tool not in covered]
+    if missing_positive:
+        fail('reports/mcp-acceptance-cases.json has no successful acceptance case for: '
+             + ', '.join(missing_positive))
+    reports = {}
+    for name in RUNTIME_REPORTS:
+        report = read_json(project / 'reports' / name, f'the pipeline runtime report {name}')
+        if not isinstance(report, dict):
+            fail(f'reports/{name} must be a JSON object')
+        if (report.get('success') is not True or report.get('mode') != 'calls'
+                or report.get('require_all_tools') is not True):
+            fail(f'reports/{name} is not a successful strict real-call validation '
+                 '(success=true, mode="calls", require_all_tools=true)')
+        for field in ('expected', 'actual'):
+            value = report.get(field)
+            if not isinstance(value, list) or set(value) != set(tools):
+                fail(f'reports/{name}: {field} does not match reports/expected-mcp-tools.json')
+        if report.get('missing') != [] or report.get('unexpected') != []:
+            fail(f'reports/{name}: missing or unexpected tools in the validated inventory')
+        server = report.get('server')
+        if not isinstance(server, str) or not server.strip():
+            fail(f'reports/{name}: no validated server path')
+        server_path = Path(server)
+        if not server_path.is_absolute():
+            server_path = project / server_path
+        if server_path.resolve() != entry.resolve():
+            fail(f'reports/{name}: validated {server!r}, not the delivered entry point')
+        if not isinstance(report.get('python'), str) or not report['python'].strip():
+            fail(f'reports/{name}: no validated interpreter')
+        version = report.get('python_version')
+        if not isinstance(version, str) or (version != python and not version.startswith(python + '.')):
+            fail(f'reports/{name}: validated with Python {version!r}, not --python {python}')
+        outcomes = report.get('cases')
+        if not isinstance(outcomes, list) or len(outcomes) != len(cases_by_name):
+            fail(f'reports/{name}: case outcomes do not cover the acceptance cases')
+        seen = set()
+        for outcome in outcomes:
+            case_name = outcome.get('name') if isinstance(outcome, dict) else None
+            if case_name in seen or case_name not in cases_by_name:
+                fail(f'reports/{name}: duplicate or unknown case outcome {case_name!r}')
+            if outcome.get('tool') != cases_by_name[case_name] or outcome.get('success') is not True:
+                fail(f'reports/{name}: case {case_name!r} is not a successful outcome for its tool')
+            seen.add(case_name)
+        reports[name] = report
+    return reports
 
 
 def summarize_cases(cases, tools) -> list:
@@ -98,6 +205,9 @@ def summarize_cases(cases, tools) -> list:
 
 
 def build_metadata(args) -> dict:
+    if not PYTHON.fullmatch(args.python or ''):
+        fail('--python must be the major.minor version the delivery was validated with, '
+             f'e.g. 3.12 (the pipeline records the full version); got {args.python!r}')
     for label, value, pattern in (
         ('--package-id', args.package_id, PACKAGE_ID),
         ('--package-version', args.package_version, VERSION),
@@ -141,6 +251,8 @@ def build_validation(args, cases, pins: int, delivery_digest) -> str:
         f'- Runtime: Python {args.python}; `src/requirements.txt` pins {pins} distribution(s).',
         f'- Tool inventory reconciled by the build pipeline ({len(args.tools)} tool(s)): '
         + ', '.join(f'`{t}`' for t in args.tools) + '.',
+        f'- Strict real-call validation passed in the project environment and in a clean '
+        f'environment rebuilt from `src/requirements.txt` ({len(cases)} case(s)).',
         '- Acceptance calls recorded by the pipeline\'s independent verifier:',
     ]
     body += summarize_cases(cases, args.tools)
@@ -201,14 +313,22 @@ def main() -> int:
     if not isinstance(cases, list) or not cases:
         fail('reports/mcp-acceptance-cases.json must be a nonempty array of cases')
 
+    entry = entry_point_file(args.project)
+    check_python_route(args.project)
+
     metadata = build_metadata(args)
+    check_runtime_evidence(args.project, entry, args.tools, cases, args.python)
 
     license_file = args.license_file.expanduser().resolve()
     if not license_file.is_file():
         fail(f'--license-file not found: {license_file}')
 
     delivery = args.project / 'reports/delivery-validation.json'
-    delivery_digest = hashlib.sha256(delivery.read_bytes()).hexdigest() if delivery.is_file() else None
+    delivery_report = read_json(delivery, 'the pipeline delivery report')
+    if not isinstance(delivery_report, dict) or delivery_report.get('success') is not True:
+        fail('reports/delivery-validation.json must record a successful extraction acceptance '
+             '(success: true)')
+    delivery_digest = hashlib.sha256(delivery.read_bytes()).hexdigest()
     pins = len([line for line in
                 (args.project / 'src/requirements.txt').read_text(encoding='utf-8').splitlines()
                 if line.strip() and not line.lstrip().startswith('#')])
@@ -231,10 +351,11 @@ def main() -> int:
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import catalog  # noqa: E402  (same directory; validate() does not depend on ROOT)
+    from jsonschema.exceptions import ValidationError  # noqa: E402
 
     try:
         catalog.validate(target, False)
-    except ValueError as exc:
+    except (ValueError, ValidationError) as exc:
         print(f'error: the converted package does not pass validation: {exc}', file=sys.stderr)
         print(f'left {target} in place for inspection', file=sys.stderr)
         return 2

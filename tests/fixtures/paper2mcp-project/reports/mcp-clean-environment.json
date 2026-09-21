@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "mode": "calls",
+  "require_all_tools": true,
+  "server": "src/demoqc_mcp.py",
+  "python": "/clean/validation-env/bin/python",
+  "python_version": "3.12.7",
+  "expected": ["qc_summary"],
+  "actual": ["qc_summary"],
+  "missing": [],
+  "unexpected": [],
+  "cases": [
+    {"name": "tutorial-reference", "tool": "qc_summary", "success": true},
+    {"name": "missing-input", "tool": "qc_summary", "success": true}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "package_id": "harmonypy-integration",
+  "package_version": "0.1.0",
+  "name": "harmonypy integration tools",
+  "summary": "Run Harmony batch-effect correction and LISI integration scoring on PCA embeddings with harmonypy 2.0.2.",
+  "repo_url": "https://github.com/slowkow/harmonypy",
+  "commit": "dbd0984705530761f1e0a11ab5744345935437a0",
+  "doi": "10.1038/s41592-019-0619-0",
+  "paper_title": "Fast, sensitive and accurate integration of single-cell data with Harmony",
+  "tools": [
+    "run_harmony",
+    "compute_lisi"
+  ],
+  "python": "3.12",
+  "license": "GPL-3.0-or-later",
+  "demo": false
+}

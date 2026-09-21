@@ -1,0 +1,4 @@
+fastmcp==4.0.3
+harmonypy==2.0.2
+numpy==2.5.3
+pandas==2.3.3

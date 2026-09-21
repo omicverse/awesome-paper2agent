@@ -478,3 +478,126 @@ class FromPaper2McpTests(unittest.TestCase):
         r = self.run_converter('--commit', 'abc1234')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('--commit', r.stderr)
+
+    def make_project(self, name='project-copy'):
+        copy = self.root / name
+        shutil.copytree(self.PROJECT, copy)
+        return copy
+
+    def test_r_route_material_is_refused(self):
+        project = self.make_project()
+        scripts = project / 'src/r_scripts'
+        scripts.mkdir(parents=True)
+        (scripts / 'demoqc.R').write_text('x <- 1\n', encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('non-Python runtime material', r.stderr)
+        self.assertIn('src/r_scripts/demoqc.R', r.stderr)
+
+    def test_non_python_route_record_is_refused(self):
+        project = self.make_project()
+        pipeline = project / '.pipeline'
+        pipeline.mkdir()
+        (pipeline / 'language.json').write_text(
+            json.dumps({'route': 'r', 'reason': 'R implementation'}), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("route 'r'", r.stderr)
+
+    def test_pycache_is_ignored_by_the_route_check(self):
+        project = self.make_project()
+        cache = project / 'src/__pycache__'
+        cache.mkdir()
+        (cache / 'demoqc_mcp.cpython-312.pyc').write_bytes(b'\x00\x01')
+        r = self.run_converter('--project', str(project))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_missing_runtime_reports_are_refused(self):
+        project = self.make_project()
+        (project / 'reports/mcp-project-environment.json').unlink()
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('mcp-project-environment.json', r.stderr)
+        self.assertFalse((self.out / 'demo-qc').exists())
+
+    def test_failed_runtime_report_is_refused(self):
+        project = self.make_project()
+        report = project / 'reports/mcp-clean-environment.json'
+        data = json.loads(report.read_text(encoding='utf-8'))
+        data['success'] = False
+        report.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not a successful strict real-call validation', r.stderr)
+
+    def test_runtime_inventory_must_match_the_tool_report(self):
+        project = self.make_project()
+        report = project / 'reports/mcp-clean-environment.json'
+        data = json.loads(report.read_text(encoding='utf-8'))
+        data['actual'] = ['qc_summary', 'extra_tool']
+        report.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('actual does not match', r.stderr)
+
+    def test_runtime_cases_must_match_the_acceptance_cases(self):
+        project = self.make_project()
+        report = project / 'reports/mcp-project-environment.json'
+        data = json.loads(report.read_text(encoding='utf-8'))
+        data['cases'] = data['cases'][:1]
+        report.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('case outcomes do not cover', r.stderr)
+
+    def test_runtime_server_must_be_the_entry_point(self):
+        project = self.make_project()
+        report = project / 'reports/mcp-clean-environment.json'
+        data = json.loads(report.read_text(encoding='utf-8'))
+        data['server'] = 'src/other_mcp.py'
+        report.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not the delivered entry point', r.stderr)
+
+    def test_python_must_be_major_minor_and_match_the_evidence(self):
+        r = self.run_converter('--python', '3.12.13')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('--python must be the major.minor', r.stderr)
+        self.assertNotIn('Traceback', r.stderr)
+        r = self.run_converter('--python', '3.11')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not --python 3.11', r.stderr)
+
+    def test_failed_delivery_report_is_refused(self):
+        project = self.make_project()
+        report = project / 'reports/delivery-validation.json'
+        data = json.loads(report.read_text(encoding='utf-8'))
+        data['success'] = False
+        report.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('successful extraction acceptance', r.stderr)
+
+    def test_missing_tool_positive_case_is_refused(self):
+        project = self.make_project()
+        cases = project / 'reports/mcp-acceptance-cases.json'
+        data = json.loads(cases.read_text(encoding='utf-8'))
+        data = [case for case in data if case.get('name') != 'tutorial-reference']
+        report = project / 'reports/mcp-project-environment.json'
+        env = json.loads(report.read_text(encoding='utf-8'))
+        env['cases'] = [outcome for outcome in env['cases'] if outcome['name'] != 'tutorial-reference']
+        report.write_text(json.dumps(env), encoding='utf-8')
+        clean = project / 'reports/mcp-clean-environment.json'
+        data_clean = json.loads(clean.read_text(encoding='utf-8'))
+        data_clean['cases'] = [o for o in data_clean['cases'] if o['name'] != 'tutorial-reference']
+        clean.write_text(json.dumps(data_clean), encoding='utf-8')
+        cases.write_text(json.dumps(data), encoding='utf-8')
+        r = self.run_converter('--project', str(project))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('no successful acceptance case', r.stderr)
+
+    def test_delivery_report_requirement_is_documented_in_validation(self):
+        self.assertEqual(self.run_converter().returncode, 0)
+        body = (self.out / 'demo-qc' / 'VALIDATION.md').read_text(encoding='utf-8')
+        self.assertIn('clean environment rebuilt from `src/requirements.txt`', body)

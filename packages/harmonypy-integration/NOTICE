@@ -1,0 +1,16 @@
+harmonypy MCP package
+=====================
+
+This package wraps harmonypy 2.0.2:
+  repository: https://github.com/slowkow/harmonypy
+  commit:     dbd0984705530761f1e0a11ab5744345935437a0 (tag v2.0.2)
+  paper:      Korsunsky et al., Nature Methods 16, 1289-1296 (2019),
+              doi:10.1038/s41592-019-0619-0
+  license:    GPL-3.0-or-later
+  copyright:  (C) 2018 Ilya Korsunsky, 2019 Kamil Slowikowski and contributors
+
+harmonypy source is not redistributed in this package; the pinned PyPI release
+is installed from src/requirements.txt (sdist sha256
+0d6e4491edb4638db3ab8d90fdc961df8b4d9b46d80b30afadaaf5026f102a7d; all files
+shipped in the sdist and wheel were verified byte-identical to the pinned
+commit). This wrapper is distributed under the same license; see LICENSE.
