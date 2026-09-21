@@ -3,8 +3,8 @@
   "approvals": [
     {
       "package_id": "scanpy-workflow",
-      "package_version": "0.1.0",
-      "content_sha256": "4e3fd0215cc9f8626c4812d79d6e480a607404cf228c3c45d9968b26d2cd70fb",
+      "package_version": "0.1.1",
+      "content_sha256": "ecc672e9da1ee0a10fd504d5e9a648cea77051a97d539ff27479fb32f3a1d6c2",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
     }

@@ -26,13 +26,13 @@ The seven tools were then called in order over MCP stdio, on this checkout, with
 
 | Tool | Result |
 |---|---|
-| `qc_metrics` | 600 cells, 300 genes, 5 mitochondrial genes; median 772 total counts; 2 cells above 20% mitochondrial |
+| `qc_metrics` | 600 cells, 300 genes, 5 mitochondrial genes; median 772 total counts; 8 cells above 20% mitochondrial — the 6 inflated cells plus the 2 nearly empty ones, whose few counts are all mitochondrial |
 | `filter_cells` | 600 -> 586, **removed exactly the 14 planted failures**, wrote `1-filtered.h5ad` |
 | `normalize_hvg` | 150 of 300 genes selected as highly variable |
 | `pca_neighbors` | 20 components, first component 1.6% of variance |
 | `leiden_clusters` | **3 clusters of 192 / 208 / 186 cells** — the three planted populations |
 | `umap_embedding` | 586 cells embedded in 2 dimensions |
-| `rank_genes` | cluster 0 -> `GENE005/GENE006/GENE007`, cluster 1 -> `GENE008/GENE009/GENE010`, cluster 2 -> `GENE011/GENE012/GENE013` — **exactly the three marker blocks planted in the data** |
+| `rank_genes` | cluster 0 -> `GENE006/GENE005/GENE007`, cluster 1 -> `GENE009/GENE010/GENE008`, cluster 2 -> `GENE013/GENE012/GENE011` — **exactly the three marker blocks planted in the data** |
 
 The cluster-to-marker correspondence is the point of the check: the tools did not merely run,
 they recovered a known ground truth. An earlier run with `min_genes=20` left the six 30-gene

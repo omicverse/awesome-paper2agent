@@ -1,14 +1,22 @@
 {
   "schema_version": 1,
   "package_id": "scanpy-workflow",
-  "package_version": "0.1.0",
+  "package_version": "0.1.1",
   "name": "Scanpy Workflow",
   "summary": "单细胞预处理与聚类的完整流程：质控、过滤、标准化与高变基因、PCA 与近邻图、Leiden 聚类、UMAP、标记基因。",
   "repo_url": "https://github.com/scverse/scanpy",
   "commit": "ff2133115f639fccce9633aa7f5309c36a0972e7",
   "doi": "10.1186/s13059-017-1382-0",
   "paper_title": "SCANPY: large-scale single-cell gene expression data analysis",
-  "tools": ["qc_metrics", "filter_cells", "normalize_hvg", "pca_neighbors", "leiden_clusters", "umap_embedding", "rank_genes"],
+  "tools": [
+    "qc_metrics",
+    "filter_cells",
+    "normalize_hvg",
+    "pca_neighbors",
+    "leiden_clusters",
+    "umap_embedding",
+    "rank_genes"
+  ],
   "python": "3.12",
   "license": "Apache-2.0",
   "demo": false
