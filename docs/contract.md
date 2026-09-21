@@ -37,6 +37,18 @@ implies lab sharing, and public sourcing never implies an environment is distrib
 A catalog built with `channel: local-demo` contains examples only and is not a release. Release builds
 exclude `examples/`, require a clean committed tree and reject missing upstream provenance.
 
+## What validation does not establish
+
+- `tools` is what the package declares. Nothing runs the entry point to check that the
+  advertised tools exist, so a reviewer either does that by hand or accepts the declaration.
+- `name`, `summary`, `tools` and `USAGE.md` are contributor text that reaches a user's agent
+  context once installed. They are reviewed but not filtered; treat a package's own prose as
+  untrusted input.
+- A review says a maintainer looked at the content. It is not a security audit, and it is not
+  evidence that the package's numbers agree with the paper.
+- `repository` URLs and commits are checked to exist on GitHub, not to contain what the package
+  claims to wrap.
+
 ## Reviewed catalog
 
 `reviews.json` is a maintainer-owned approval ledger, not a contributor-supplied badge.

@@ -24,6 +24,15 @@ jobs:
         run: python tools/catalog.py validate
       - name: Validator tests
         run: python -m unittest discover -s tests -v
+      # A pull request carries its own copy of the validator, so a one-line change to
+      # tools/ would otherwise neuter the check that is supposed to gate it. The gate
+      # below runs the default branch's validator against this commit's packages.
+      - name: Gate with the default branch's validator, not this commit's
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "${{ github.event.repository.default_branch }}"
+          git checkout FETCH_HEAD -- tools schema requirements-dev.txt
+          python tools/catalog.py validate
 
   # Contributors cannot approve their own package, so the approval requirement is
   # enforced on the default branch rather than on every pull request.
@@ -65,6 +74,31 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check 'uv==0.11.3'
           uv venv /tmp/probe --python "$(command -v python)"
+      - name: Every package must name a real upstream commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          metas=(packages/*/metadata.json)
+          if [ ${#metas[@]} -eq 0 ]; then
+            echo "no packages yet; nothing to check"
+            exit 0
+          fi
+          failed=0
+          for meta in "${metas[@]}"; do
+            repo=$(python -c "import json;print(json.load(open('$meta'))['repo_url'])")
+            sha=$(python -c "import json;print(json.load(open('$meta'))['commit'])")
+            slug=${repo#https://github.com/}
+            if ! gh api "repos/$slug/commits/$sha" >/dev/null 2>&1; then
+              echo "::error file=$meta::$slug@$sha does not exist upstream"
+              failed=1
+            else
+              echo "$slug@${sha:0:7} exists"
+            fi
+          done
+          exit $failed
+
       - name: Every pinned dependency must resolve on every index we install from
         run: |
           set -uo pipefail
@@ -81,9 +115,26 @@ jobs:
               https://pypi.tuna.tsinghua.edu.cn/simple \
               https://pypi.org/simple; do
               echo "::group::$req on $index"
-              if ! uv pip install --dry-run --python /tmp/probe/bin/python -r "$req" --index-url "$index"; then
+              ok=0
+              for attempt in 1 2 3; do
+                if out=$(uv pip install --dry-run --python /tmp/probe/bin/python -r "$req" --index-url "$index" 2>&1); then
+                  ok=1
+                  break
+                fi
+                printf '%s\n' "$out" | tail -5
+                echo "attempt $attempt failed against $index; retrying"
+                sleep 5
+              done
+              if [ "$ok" -ne 1 ]; then
+                printf '%s\n' "$out" | tail -20
                 echo "::error file=$req::a pin does not resolve on $index"
                 failed=1
+              elif printf '%s\n' "$out" | grep -qi 'is yanked'; then
+                printf '%s\n' "$out" | grep -i 'is yanked'
+                echo "::error file=$req::a pin is yanked; pin a release that has not been withdrawn"
+                failed=1
+              else
+                echo "resolved"
               fi
               echo "::endgroup::"
             done

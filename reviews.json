@@ -7,6 +7,13 @@
       "content_sha256": "ecc672e9da1ee0a10fd504d5e9a648cea77051a97d539ff27479fb32f3a1d6c2",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
+    },
+    {
+      "package_id": "scrublet-doublets",
+      "package_version": "0.1.0",
+      "content_sha256": "1de664210fb39963d285a3fd01f521bfb62d820f866edff488f08a1bd5d828d8",
+      "reviewed_by": "mengxu98",
+      "reviewed_at": "2026-09-21"
     }
   ]
 }
