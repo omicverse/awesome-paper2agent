@@ -117,15 +117,24 @@ jobs:
               echo "::group::$req on $index"
               ok=0
               for attempt in 1 2 3; do
-                if uv pip install --dry-run --python /tmp/probe/bin/python -r "$req" --index-url "$index"; then
-                  ok=1; break
+                if out=$(uv pip install --dry-run --python /tmp/probe/bin/python -r "$req" --index-url "$index" 2>&1); then
+                  ok=1
+                  break
                 fi
+                printf '%s\n' "$out" | tail -5
                 echo "attempt $attempt failed against $index; retrying"
                 sleep 5
               done
               if [ "$ok" -ne 1 ]; then
+                printf '%s\n' "$out" | tail -20
                 echo "::error file=$req::a pin does not resolve on $index"
                 failed=1
+              elif printf '%s\n' "$out" | grep -qi 'is yanked'; then
+                printf '%s\n' "$out" | grep -i 'is yanked'
+                echo "::error file=$req::a pin is yanked; pin a release that has not been withdrawn"
+                failed=1
+              else
+                echo "resolved"
               fi
               echo "::endgroup::"
             done
