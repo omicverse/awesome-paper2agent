@@ -1,0 +1,12 @@
+This package wraps Scanpy, distributed under the BSD 3-Clause License:
+  https://github.com/scverse/scanpy/blob/main/LICENSE
+
+Copyright (c) 2017 F. Alexander Wolf, P. Angerer, Theis Lab
+All rights reserved.
+
+Scanpy, Leidenalg and UMAP are not redistributed here; they are installed from a
+package index as pinned runtime dependencies. Cite the paper this package is built from:
+
+  Wolf, F. A., Angerer, P. & Theis, F. J.
+  SCANPY: large-scale single-cell gene expression data analysis.
+  Genome Biology 19, 15 (2018). https://doi.org/10.1186/s13059-017-1382-0
