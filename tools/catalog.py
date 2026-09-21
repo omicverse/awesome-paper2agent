@@ -48,6 +48,16 @@ ASSIGNED_SECRET = re.compile(
 
 PLACEHOLDER = re.compile(r'your|example|placeholder|changeme|redact|dummy|sample|xxx|<[^>]*>|\.\.\.|\*\*\*', re.I)
 
+# The GitHub login an approval attributes the submission to, so a consumer can show who
+# submitted a package next to who reviewed it: 1-39 letters/digits/single hyphens, never
+# leading, trailing or doubled. Junk is refused instead of published as attribution.
+GITHUB_LOGIN = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}\Z')
+
+# `submitted_by` is accepted beside these fields before it is required from every
+# approval: a pull request is gated by the default branch's validator, so a ledger that
+# carries a field the default branch has never seen is refused until this lands.
+APPROVAL_FIELDS = {'package_id', 'package_version', 'content_sha256', 'reviewed_by', 'reviewed_at'}
+
 # Machine-local or private-network references. A package must be runnable anywhere,
 # so its own author's filesystem, loopback and internal addresses are rejected while
 # genuine public names such as `localhost.example.com` are not.
@@ -233,12 +243,17 @@ def reviewed_catalog():
         raise ValueError('Invalid review ledger')
     records, outputs, seen = [], {}, set()
     for approval in ledger['approvals']:
-        if set(approval) != {'package_id', 'package_version', 'content_sha256', 'reviewed_by', 'reviewed_at'}:
+        fields = set(approval)
+        if fields != APPROVAL_FIELDS and fields != APPROVAL_FIELDS | {'submitted_by'}:
             raise ValueError('Invalid approval fields')
         package_id = approval['package_id']
         if not re.fullmatch(r'[a-z][a-z0-9]*(?:-[a-z0-9]+)*', package_id) or package_id in seen:
             raise ValueError('Invalid/duplicate approved package')
         seen.add(package_id)
+        if 'submitted_by' in approval:
+            submitted_by = approval['submitted_by']
+            if not isinstance(submitted_by, str) or not GITHUB_LOGIN.fullmatch(submitted_by):
+                raise ValueError('submitted_by must be a GitHub login')
         if not approval['reviewed_by'] or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', approval['reviewed_at']):
             raise ValueError('Review attribution/date required')
         folder = ROOT / 'packages' / package_id

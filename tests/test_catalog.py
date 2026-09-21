@@ -94,6 +94,21 @@ class ReviewTests(unittest.TestCase):
     def test_matching_approval_is_exported(self):
         self.ledger([self.record])
         self.assertEqual(len(catalog.reviewed_catalog()[0]), 1)
+    def test_a_submitter_login_is_exported_when_present(self):
+        self.ledger([{**self.record, 'submitted_by': 'test-fixture'}])
+        self.assertEqual(catalog.reviewed_catalog()[0][0]['review']['submitted_by'], 'test-fixture')
+    def test_a_blank_or_junk_submitter_is_refused(self):
+        for submitted_by in ('', '  ', 'not a login', '-leading', 'trailing-', 'double--hyphen',
+                             'x' * 40, 42):
+            record = {**self.record, 'submitted_by': submitted_by}
+            with self.subTest(submitted_by=submitted_by):
+                self.ledger([record])
+                with self.assertRaisesRegex(ValueError, 'submitted_by'):
+                    catalog.reviewed_catalog()
+    def test_an_unknown_approval_field_is_still_refused(self):
+        self.ledger([{**self.record, 'approved_by': 'test-fixture'}])
+        with self.assertRaisesRegex(ValueError, 'Invalid approval fields'):
+            catalog.reviewed_catalog()
     def test_changed_metadata_invalidates_review(self):
         self.ledger([self.record])
         p = self.folder / 'metadata.json'; meta = json.loads(p.read_text()); meta['summary'] = 'Changed'
