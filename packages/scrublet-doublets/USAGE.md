@@ -39,6 +39,17 @@ and `evaluate_calls` read the file `detect_doublets` wrote; without it they refu
   path is not exposed: on the pinned annoy build it returned a fixed two-item neighbour list,
   which gave every cell the same score and left the threshold unset.
 - Scrublet scores a sample as a whole, so run it **per sample**, not on merged datasets.
+- `n_prin_comps` must be smaller than both the number of cells and the number of genes left
+  by Scrublet's gene filter (`min_counts=3`, `min_cells=3`, `min_gene_variability_pctl=85`).
+  Filtering can leave fewer genes than the file contains; when that leaves too few dimensions,
+  the tool returns a clear error naming the counts instead of leaking scikit-learn's raw
+  `n_components` message.
+- `detected_doublet_rate` is the fraction of observed cells called doublets,
+  `detectable_doublet_fraction` is the fraction of simulated doublets above the threshold, and
+  `overall_doublet_rate` is Scrublet's `detected_doublet_rate / detectable_doublet_fraction`.
+  The last is an extrapolated estimate, not a bounded probability: it can exceed 1 when the
+  observed call rate exceeds the detectable fraction (a reported 1.205 is an estimated 120.5%),
+  so read it together with the score histogram and do not treat it as a corrected rate.
 - Scrublet always returns a threshold and calls; on an input with no doublet structure it
   can call most cells (55 of 60 on a structureless check input). Read the score
   distribution before trusting the calls. An input with zero variance between cells fails

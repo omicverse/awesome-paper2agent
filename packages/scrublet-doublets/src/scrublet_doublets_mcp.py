@@ -107,14 +107,36 @@ def _run(counts, expected_doublet_rate, sim_doublet_ratio, n_prin_comps, random_
         sim_doublet_ratio=sim_doublet_ratio,
         random_state=random_state,
     )
-    scores, predicted = scrub.scrub_doublets(
-        n_prin_comps=n_prin_comps,
-        use_approx_neighbors=False,
-        min_counts=MIN_COUNTS,
-        min_cells=MIN_GENE_CELLS,
-        min_gene_variability_pctl=GENE_VARIABILITY_PCTL,
-        verbose=False,
-    )
+    try:
+        scores, predicted = scrub.scrub_doublets(
+            n_prin_comps=n_prin_comps,
+            use_approx_neighbors=False,
+            min_counts=MIN_COUNTS,
+            min_cells=MIN_GENE_CELLS,
+            min_gene_variability_pctl=GENE_VARIABILITY_PCTL,
+            verbose=False,
+        )
+    except ValueError as exc:
+        # sklearn reports only the PCA dimensions; name the dataset and the filter that
+        # produced them so the caller knows which input needs changing.
+        if "must be strictly less than min(n_samples, n_features)" not in str(exc):
+            raise
+        genes_after_filter = int(np.asarray(scrub._gene_filter).size)
+        available = min(int(counts.shape[0]), genes_after_filter)
+        if available > 2:
+            action = f"Lower n_prin_comps to at most {available - 1}"
+        else:
+            action = (
+                "Lowering n_prin_comps cannot make PCA possible; supply a dataset with more "
+                "cells or genes passing the filter"
+            )
+        raise ValueError(
+            f"n_prin_comps={n_prin_comps} is too large for this dataset: {counts.shape[0]} cells "
+            f"x {counts.shape[1]} genes, and {genes_after_filter} genes remain after Scrublet's "
+            f"gene filter (min_counts={MIN_COUNTS}, min_cells={MIN_GENE_CELLS}, "
+            f"min_gene_variability_pctl={GENE_VARIABILITY_PCTL}); PCA with svd_solver='arpack' "
+            f"requires n_prin_comps < min(cells, genes_after_filter) = {available}. {action}."
+        ) from exc
     calls = None if predicted is None else np.asarray(predicted, dtype=bool)
     return scrub, np.asarray(scores, dtype=np.float64), calls
 
@@ -188,6 +210,8 @@ def detect_doublets(
         "predicted_doublets": int(calls.sum()),
         "predicted_doublet_rate": float(calls.mean()),
         "expected_doublet_rate": float(expected_doublet_rate),
+        # Kept under Scrublet's names: overall is detected/detectable, an extrapolated
+        # ratio rather than a bounded probability, and it may exceed 1 (see USAGE.md).
         "detected_doublet_rate": float(scrub.detected_doublet_rate_),
         "detectable_doublet_fraction": float(scrub.detectable_doublet_fraction_),
         "overall_doublet_rate": float(scrub.overall_doublet_rate_),

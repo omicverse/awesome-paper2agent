@@ -17,8 +17,8 @@
     },
     {
       "package_id": "scrublet-doublets",
-      "package_version": "0.1.0",
-      "content_sha256": "1de664210fb39963d285a3fd01f521bfb62d820f866edff488f08a1bd5d828d8",
+      "package_version": "0.1.1",
+      "content_sha256": "4d2471c8ecf23be978bb215f402d31eea45a0f56d606702030b50c38df6711fc",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
     }
