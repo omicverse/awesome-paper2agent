@@ -52,9 +52,12 @@ exclude `examples/`, require a clean committed tree and reject missing upstream 
 ## Reviewed catalog
 
 `reviews.json` is a maintainer-owned approval ledger, not a contributor-supplied badge.
-Each approval pins package ID/version, reviewer/date, and `content_sha256` computed over
-canonical JSON metadata (`sort_keys=True`, compact separators, Python default ensure_ascii)
-+ one newline byte + the deterministic ZIP bytes. Changing metadata OR code invalidates approval.
+Each approval pins package ID/version, `submitted_by` (the GitHub login that opened the pull request the
+package arrived in), `reviewed_by` (the maintainer recording the approval), the review date, and
+`content_sha256` computed over canonical JSON metadata (`sort_keys=True`, compact separators, Python
+default ensure_ascii) + one newline byte + the deterministic ZIP bytes. Submission and review are separate
+claims: `submitted_by` attributes who sent the package, `reviewed_by` attributes who accepted it.
+Changing metadata OR code invalidates approval.
 No approval is inferred from passing tests, and approvals are recorded only for content that has been
 reviewed. Protect this file with maintainer review before publication.
 

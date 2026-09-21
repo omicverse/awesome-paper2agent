@@ -37,6 +37,11 @@ approval entry **inside the same pull request** before merging it: open the PR, 
 `reviews.json` entry with the content hash, let CI re-run, then merge. Adding the package first and the approval
 afterwards leaves `main` failing its own gate.
 
+The maintainer writing that entry records both identities: `submitted_by` is the GitHub account that submitted the
+package — the account that opened the pull request adding it — while `reviewed_by` is the maintainer recording the
+approval. They answer different questions, so consumers can display the submitter next to the reviewer; the
+validator refuses a blank or non-login `submitted_by`.
+
 ## Building with an agent
 
 Build instructions for agents live in [AGENTS.md](./AGENTS.md); the README shows the one-line prompt

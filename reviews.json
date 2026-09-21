@@ -5,6 +5,7 @@
       "package_id": "harmonypy-integration",
       "package_version": "0.1.0",
       "content_sha256": "5d751f2e4e70a0b000be2c48d9f23e54052d07dea143abb7c50fc3c2da7cd1f9",
+      "submitted_by": "mengxu98",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
     },
@@ -12,6 +13,7 @@
       "package_id": "scanpy-workflow",
       "package_version": "0.1.1",
       "content_sha256": "ecc672e9da1ee0a10fd504d5e9a648cea77051a97d539ff27479fb32f3a1d6c2",
+      "submitted_by": "mengxu98",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
     },
@@ -19,6 +21,7 @@
       "package_id": "scrublet-doublets",
       "package_version": "0.1.1",
       "content_sha256": "4d2471c8ecf23be978bb215f402d31eea45a0f56d606702030b50c38df6711fc",
+      "submitted_by": "mengxu98",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-21"
     }

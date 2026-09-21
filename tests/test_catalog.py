@@ -83,7 +83,9 @@ class ReviewTests(unittest.TestCase):
         (self.folder / 'metadata.json').write_text(json.dumps(meta))
         write_validation(self.folder)
         meta, data = catalog.archive(self.folder)
-        self.record = {'package_id': 'sequence-stats', 'package_version': '0.1.0', 'content_sha256': hashlib.sha256(json.dumps(meta, sort_keys=True, separators=(',', ':')).encode() + b'\n' + data).hexdigest(), 'reviewed_by': 'test-fixture', 'reviewed_at': '2026-09-21'}
+        sha = hashlib.sha256(json.dumps(meta, sort_keys=True, separators=(',', ':')).encode() + b'\n' + data).hexdigest()
+        self.record = {'package_id': 'sequence-stats', 'package_version': '0.1.0', 'content_sha256': sha,
+                       'submitted_by': 'test-fixture', 'reviewed_by': 'test-fixture', 'reviewed_at': '2026-09-21'}
     def tearDown(self):
         self.patch.stop(); self.tmp.cleanup()
     def ledger(self, approvals):
@@ -94,9 +96,15 @@ class ReviewTests(unittest.TestCase):
     def test_matching_approval_is_exported(self):
         self.ledger([self.record])
         self.assertEqual(len(catalog.reviewed_catalog()[0]), 1)
-    def test_a_submitter_login_is_exported_when_present(self):
-        self.ledger([{**self.record, 'submitted_by': 'test-fixture'}])
+    def test_the_submitter_is_exported_with_the_approval(self):
+        self.ledger([self.record])
         self.assertEqual(catalog.reviewed_catalog()[0][0]['review']['submitted_by'], 'test-fixture')
+    def test_a_missing_submitter_is_refused(self):
+        record = dict(self.record)
+        record.pop('submitted_by')
+        self.ledger([record])
+        with self.assertRaisesRegex(ValueError, 'Invalid approval fields'):
+            catalog.reviewed_catalog()
     def test_a_blank_or_junk_submitter_is_refused(self):
         for submitted_by in ('', '  ', 'not a login', '-leading', 'trailing-', 'double--hyphen',
                              'x' * 40, 42):
@@ -184,7 +192,8 @@ class RobustnessTests(unittest.TestCase):
         content = hashlib.sha256(
             json.dumps(meta, sort_keys=True, separators=(',', ':')).encode() + b'\n' + data).hexdigest()
         self.ledger([{'package_id': 'sequence-stats', 'package_version': meta['package_version'],
-                      'content_sha256': content, 'reviewed_by': 'test', 'reviewed_at': '2026-09-21'}])
+                      'content_sha256': content, 'submitted_by': 'test-fixture',
+                      'reviewed_by': 'test', 'reviewed_at': '2026-09-21'}])
         self.assertEqual(catalog.validate_all(require_approved=True), 1)
 
     def test_unpinned_or_ranged_requirement_is_rejected(self):
@@ -689,8 +698,8 @@ class AuditFindingTests(unittest.TestCase):
         (self.root / 'reviews.json').write_text(json.dumps({
             'schema_version': 1,
             'approvals': [{'package_id': 'ghost', 'package_version': '0.1.0',
-                           'content_sha256': 'a' * 64, 'reviewed_by': 'someone',
-                           'reviewed_at': '2026-09-21'}]}), encoding='utf-8')
+                           'content_sha256': 'a' * 64, 'submitted_by': 'someone',
+                           'reviewed_by': 'someone', 'reviewed_at': '2026-09-21'}]}), encoding='utf-8')
         (self.root / 'packages/ghost').exists()
         with self.assertRaisesRegex(ValueError, 'stale approval'):
             catalog.validate_all(require_approved=True)
