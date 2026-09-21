@@ -45,3 +45,47 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
       - name: Every package under packages/ must carry a matching approval
         run: python tools/catalog.py validate --require-approved
+
+  # A pin that resolves on the author's machine can still be missing from the index a
+  # user installs from: the product probes several, and they lag by different amounts.
+  # Measured once: anndata 0.13.4 resolved on Tsinghua but not Aliyun, 0.13.3 on
+  # neither, 0.13.2 on all three. That package passed review and then failed to install
+  # on a user's machine, which is exactly what this job exists to catch.
+  pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv and prepare a probe environment
+        run: |
+          python -m pip install --disable-pip-version-check 'uv==0.11.3'
+          uv venv /tmp/probe --python "$(command -v python)"
+      - name: Every pinned dependency must resolve on every index we install from
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          requirements=(packages/*/src/requirements.txt)
+          if [ ${#requirements[@]} -eq 0 ]; then
+            echo "no packages yet; nothing to check"
+            exit 0
+          fi
+          failed=0
+          for req in "${requirements[@]}"; do
+            for index in \
+              https://mirrors.aliyun.com/pypi/simple \
+              https://pypi.tuna.tsinghua.edu.cn/simple \
+              https://pypi.org/simple; do
+              echo "::group::$req on $index"
+              if ! uv pip install --dry-run --python /tmp/probe/bin/python -r "$req" --index-url "$index"; then
+                echo "::error file=$req::a pin does not resolve on $index"
+                failed=1
+              fi
+              echo "::endgroup::"
+            done
+          done
+          exit $failed
