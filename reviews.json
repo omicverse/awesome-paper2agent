@@ -1,4 +1,12 @@
 {
   "schema_version": 1,
-  "approvals": []
+  "approvals": [
+    {
+      "package_id": "scanpy-workflow",
+      "package_version": "0.1.0",
+      "content_sha256": "4e3fd0215cc9f8626c4812d79d6e480a607404cf228c3c45d9968b26d2cd70fb",
+      "reviewed_by": "mengxu98",
+      "reviewed_at": "2026-09-21"
+    }
+  ]
 }
