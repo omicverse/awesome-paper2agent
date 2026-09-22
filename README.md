@@ -76,8 +76,8 @@ python tools/catalog.py build --revision $(git rev-parse HEAD)
 ```
 
 `validate --require-approved` additionally fails while a package under `packages/` has no matching
-entry in `reviews.json`. The required `release-gate` check runs it on pull requests and the default
-branch. A release build requires a committed, clean source revision.
+entry in `reviews.json`. The required `release-gate` check runs it on pull requests and pushes.
+A release build requires a committed, clean source revision.
 
 ## Demo runtime check
 

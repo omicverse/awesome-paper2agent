@@ -35,10 +35,10 @@ jobs:
           python tools/catalog.py validate
 
   # Static checks should report the package's defects before its maintainer review.
-  # Approval is a separate required check on PRs and main: pending content must not
-  # merge first and leave main unable to pass its release gate.
+  # Approval is a separate required check on PRs and pushes: pending content must not
+  # merge first and leave main unable to pass its release gate. Run it on branch
+  # pushes too, so a skipped check with this name cannot satisfy branch protection.
   release-gate:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5

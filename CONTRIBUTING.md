@@ -33,7 +33,7 @@ Merging the code and approving the content are separate steps. A package stays o
 maintainer records an approval for its exact content in `reviews.json`.
 
 The `validate` check reports static defects even while a package is awaiting review. The separate,
-required `release-gate` check runs on pull requests and `main` and requires every package under
+required `release-gate` check runs on pull requests and pushes and requires every package under
 `packages/` to carry an approval for its current content. A maintainer adds that approval entry
 **inside the same pull request** before merging it: open the PR, review the content, append the
 `reviews.json` entry with the content hash, let CI re-run, then merge. Adding the package first and
