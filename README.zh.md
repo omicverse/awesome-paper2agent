@@ -71,7 +71,8 @@ python tools/catalog.py demo          # 在 dist/demo/ 生成示例目录
 python tools/catalog.py build --revision $(git rev-parse HEAD)
 ```
 
-`validate --require-approved` 会在 `packages/` 中存在未获审批的包时直接报错，默认分支会执行此检查。
+`validate --require-approved` 会在 `packages/` 中存在未获审批的包时直接报错。必需的
+`release-gate` 检查会在 PR 和默认分支上运行此命令。
 正式构建要求工作区干净（无未提交的改动），且传入的 revision 与 HEAD 一致。
 
 ## 示例运行时检查

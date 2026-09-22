@@ -32,10 +32,12 @@ receive dedicated maintainer review. Submitted package code is never executed in
 Merging the code and approving the content are separate steps. A package stays out of the release index until a
 maintainer records an approval for its exact content in `reviews.json`.
 
-Because the default branch requires every package under `packages/` to be approved, a maintainer adds that
-approval entry **inside the same pull request** before merging it: open the PR, review the content, append the
-`reviews.json` entry with the content hash, let CI re-run, then merge. Adding the package first and the approval
-afterwards leaves `main` failing its own gate.
+The `validate` check reports static defects even while a package is awaiting review. The separate,
+required `release-gate` check runs on pull requests and `main` and requires every package under
+`packages/` to carry an approval for its current content. A maintainer adds that approval entry
+**inside the same pull request** before merging it: open the PR, review the content, append the
+`reviews.json` entry with the content hash, let CI re-run, then merge. Adding the package first and
+the approval afterwards would leave `main` failing its own gate.
 
 The maintainer writing that entry records both identities: `submitted_by` is the GitHub account that submitted the
 package — the account that opened the pull request adding it — while `reviewed_by` is the maintainer recording the

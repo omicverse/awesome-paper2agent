@@ -62,15 +62,17 @@ No approval is inferred from passing tests, and approvals are recorded only for 
 reviewed. Protect this file with maintainer review before publication.
 
 `python tools/catalog.py reviewed` creates a local reviewed-only index. `validate --require-approved`
-fails while any package under `packages/` lacks a matching approval, and the default branch runs it;
-`build` requires the same. `reviewed-local` is a local inspection channel, not a release.
+fails while any package under `packages/` lacks a matching approval; the required `release-gate`
+check runs it on pull requests and the default branch. `build` requires the same. `reviewed-local`
+is a local inspection channel, not a release.
 An approval means maintainer content review, not security certification or numerical reproduction.
 The release index inherits trust from its controlled publisher; an untrusted index cannot
 establish review merely by containing `review` fields.
 
 During pull-request validation, a package whose content or version no longer matches an old approval
-is reported as pending review so its static contents can still be checked. The strict approval check
-remains enabled for `validate --require-approved`, reviewed exports and release builds.
+is reported as pending review by the ordinary `validate` check so its static contents can still be
+checked. The separate `release-gate` check stays red until a maintainer approves that exact content
+in the same pull request; reviewed exports and release builds remain strict too.
 
 ## Licensing
 
