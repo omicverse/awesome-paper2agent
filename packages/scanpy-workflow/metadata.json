@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "package_id": "scanpy-workflow",
-  "package_version": "0.1.1",
+  "package_version": "0.1.2",
   "name": "Scanpy Workflow",
   "summary": "单细胞预处理与聚类的完整流程：质控、过滤、标准化与高变基因、PCA 与近邻图、Leiden 聚类、UMAP、标记基因。",
   "repo_url": "https://github.com/scverse/scanpy",

@@ -16,8 +16,18 @@ Generated from a Paper2MCP delivery (`harmonypy`) on 2026-09-21.
 - `compute_lisi` — case `compute-lisi-fixture-label2-repeat`: asserts {"n_cells":400,"n_labels":2}; requires 1 artifact(s)
 - `compute_lisi` — case `compute-lisi-missing-label-column`: error path, expects `is not a column in the metadata table`.
 - Delivery report `reports/delivery-validation.json` (sha256 `0f0957c10467b9034a355ed14b8f20968019411388df08ef251f4942d4f9f624`) records the extracted-archive reinstall and the per-tool calls made from it.
+- Maintainer follow-up on macOS arm64 with Python 3.12.13: rebuilt an isolated
+  environment from the four pinned requirements, extracted the 0.1.1 catalog
+  ZIP, and called both `run_harmony` and `compute_lisi` over MCP stdio. Two
+  success calls and four expected rejection calls matched the audit harness,
+  including input/output identity and an already-existing output. Input file
+  SHA256 values were unchanged. This checks runtime path protection on macOS,
+  not agreement with results reported in the paper.
 
 ## What remains unverified
 
 - Agreement with numbers in the paper beyond the upstream tracked reference data.
 - Datasets larger than the tracked fixtures, multi-column batch correction, Windows and GPU execution.
+- The 0.1.1 Windows runtime recheck was blocked before MCP startup because the pinned
+  `harmonypy==2.0.2` source build could not find BLAS. The macOS recheck above does not
+  establish Windows installability or runtime behaviour.

@@ -39,10 +39,10 @@ required `release-gate` check runs on pull requests and pushes and requires ever
 `reviews.json` entry with the content hash, let CI re-run, then merge. Adding the package first and
 the approval afterwards would leave `main` failing its own gate.
 
-The maintainer writing that entry records both identities: `submitted_by` is the GitHub account that submitted the
-package — the account that opened the pull request adding it — while `reviewed_by` is the maintainer recording the
-approval. They answer different questions, so consumers can display the submitter next to the reviewer; the
-validator refuses a blank or non-login `submitted_by`.
+The maintainer writing that entry records both identities: `submitted_by` is the GitHub account that opened the
+pull request supplying the exact package version/content being approved (including an update PR), while
+`reviewed_by` is the maintainer recording the approval. They answer different questions, so consumers can
+display the submitter next to the reviewer; the validator refuses a blank or non-login `submitted_by`.
 
 ## Building with an agent
 

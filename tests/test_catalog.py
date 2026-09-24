@@ -39,30 +39,42 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(catalog.validate(self.folder, True)[0]['package_id'], 'sequence-stats')
     def test_deterministic_archive(self):
         self.assertEqual(catalog.archive(self.folder, True)[1], catalog.archive(self.folder, True)[1])
+    def test_archive_normalizes_checkout_line_endings(self):
+        expected = catalog.archive(self.folder, True)[1]
+        for path in self.folder.rglob('*'):
+            if path.is_file():
+                path.write_bytes(path.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
+        self.assertEqual(expected, catalog.archive(self.folder, True)[1])
     def test_internal_fields_rejected(self):
         p = self.folder / 'metadata.json'
-        meta = json.loads(p.read_text()); meta['registry_id'] = 'internal'
-        p.write_text(json.dumps(meta))
+        meta = json.loads(p.read_text(encoding='utf-8')); meta['registry_id'] = 'internal'
+        p.write_text(json.dumps(meta), encoding='utf-8')
         with self.assertRaises(ValidationError): catalog.validate(self.folder, True)
     def test_demo_cannot_be_release(self):
         with self.assertRaises(ValueError): catalog.validate(self.folder, False)
     def test_symlink(self):
-        (self.folder / 'src/link.py').symlink_to('/etc/hosts')
+        target = Path(self.tmp.name) / 'target.txt'
+        target.write_text('target\n', encoding='utf-8')
+        link = self.folder / 'src/link.py'
+        try:
+            link.symlink_to(Path('..') / '..' / 'target.txt')
+        except OSError as exc:
+            self.skipTest(f'symlink creation is unavailable: {exc}')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_forbidden_file(self):
-        (self.folder / '.env').write_text('placeholder')
+        (self.folder / '.env').write_text('placeholder', encoding='utf-8')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_secret(self):
-        (self.folder / 'src/leak.py').write_text('token = "' + 'ghp_' + 'a' * 36 + '"')
+        (self.folder / 'src/leak.py').write_text('token = "' + 'ghp_' + 'a' * 36 + '"', encoding='utf-8')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_private_path(self):
-        (self.folder / 'src/leak.py').write_text('# /Users/person/private')
+        (self.folder / 'src/leak.py').write_text('# /Users/person/private', encoding='utf-8')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_dependency_url(self):
-        (self.folder / 'src/requirements.txt').write_text('-r https://example.invalid/requirements.txt')
+        (self.folder / 'src/requirements.txt').write_text('-r https://example.invalid/requirements.txt', encoding='utf-8')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_duplicate_entrypoint(self):
-        (self.folder / 'src/other_mcp.py').write_text('# extra')
+        (self.folder / 'src/other_mcp.py').write_text('# extra', encoding='utf-8')
         with self.assertRaises(ValueError): catalog.validate(self.folder, True)
     def test_missing_usage(self):
         (self.folder / 'USAGE.md').unlink()
@@ -78,9 +90,9 @@ class ReviewTests(unittest.TestCase):
         self.folder = self.root / 'packages/sequence-stats'
         shutil.copytree(ROOT / 'examples/sequence-stats', self.folder)
         shutil.copytree(ROOT / 'examples/sequence-stats', self.root / 'examples/sequence-stats')
-        meta = json.loads((self.folder / 'metadata.json').read_text())
+        meta = json.loads((self.folder / 'metadata.json').read_text(encoding='utf-8'))
         meta.update(demo=False, repo_url='https://github.com/example/source', commit='a'*40, paper_title='Test fixture only', license='MIT')
-        (self.folder / 'metadata.json').write_text(json.dumps(meta))
+        (self.folder / 'metadata.json').write_text(json.dumps(meta), encoding='utf-8')
         write_validation(self.folder)
         meta, data = catalog.archive(self.folder)
         sha = hashlib.sha256(json.dumps(meta, sort_keys=True, separators=(',', ':')).encode() + b'\n' + data).hexdigest()
@@ -89,7 +101,7 @@ class ReviewTests(unittest.TestCase):
     def tearDown(self):
         self.patch.stop(); self.tmp.cleanup()
     def ledger(self, approvals):
-        (self.root / 'reviews.json').write_text(json.dumps({'schema_version': 1, 'approvals': approvals}))
+        (self.root / 'reviews.json').write_text(json.dumps({'schema_version': 1, 'approvals': approvals}), encoding='utf-8')
     def test_unreviewed_is_not_listed(self):
         self.ledger([])
         self.assertEqual(catalog.reviewed_catalog(), ([], {}))
@@ -119,12 +131,12 @@ class ReviewTests(unittest.TestCase):
             catalog.reviewed_catalog()
     def test_changed_metadata_invalidates_review(self):
         self.ledger([self.record])
-        p = self.folder / 'metadata.json'; meta = json.loads(p.read_text()); meta['summary'] = 'Changed'
-        p.write_text(json.dumps(meta))
+        p = self.folder / 'metadata.json'; meta = json.loads(p.read_text(encoding='utf-8')); meta['summary'] = 'Changed'
+        p.write_text(json.dumps(meta), encoding='utf-8')
         with self.assertRaises(ValueError): catalog.reviewed_catalog()
     def test_changed_code_invalidates_review(self):
         self.ledger([self.record])
-        with (self.folder / 'src/sequence_stats_mcp.py').open('a') as f: f.write('\n# changed\n')
+        with (self.folder / 'src/sequence_stats_mcp.py').open('a', encoding='utf-8') as f: f.write('\n# changed\n')
         with self.assertRaises(ValueError): catalog.reviewed_catalog()
 
 
@@ -141,41 +153,53 @@ class RobustnessTests(unittest.TestCase):
         self.folder = self.root / 'packages/sequence-stats'
         shutil.copytree(ROOT / 'examples/sequence-stats', self.folder)
         shutil.copytree(ROOT / 'examples/sequence-stats', self.root / 'examples/sequence-stats')
-        meta = json.loads((self.folder / 'metadata.json').read_text())
+        meta = json.loads((self.folder / 'metadata.json').read_text(encoding='utf-8'))
         meta.update(demo=False, repo_url='https://github.com/example/source', commit='a' * 40,
                     paper_title='Test fixture only', license='MIT')
-        (self.folder / 'metadata.json').write_text(json.dumps(meta))
+        (self.folder / 'metadata.json').write_text(json.dumps(meta), encoding='utf-8')
         write_validation(self.folder)
-        self.folder.joinpath('src/requirements.txt').write_text('mcp==1.12.4\n')
+        self.folder.joinpath('src/requirements.txt').write_text('mcp==1.12.4\n', encoding='utf-8')
 
     def tearDown(self):
         self.patch.stop(); self.tmp.cleanup()
 
     def ledger(self, approvals):
-        (self.root / 'reviews.json').write_text(json.dumps({'schema_version': 1, 'approvals': approvals}))
+        (self.root / 'reviews.json').write_text(json.dumps({'schema_version': 1, 'approvals': approvals}), encoding='utf-8')
 
     def test_a_stray_file_is_reported_not_crashed(self):
         self.ledger([])
-        (self.root / 'packages/NOTES.md').write_text('# notes\n')
+        (self.root / 'packages/NOTES.md').write_text('# notes\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'expected a package directory'):
             list(catalog.package_dirs('packages'))
 
     def test_gitkeep_is_skipped_and_other_dot_entries_are_refused(self):
         self.ledger([])
-        (self.root / 'packages/.gitkeep').write_text('')
+        (self.root / 'packages/.gitkeep').write_text('', encoding='utf-8')
         self.assertEqual([p.name for p in catalog.package_dirs('packages')], ['sequence-stats'])
         # A dot directory is never validated, so files parked in one reach a public PR
         # unscanned. It must be refused rather than ignored.
         (self.root / 'packages/.stash').mkdir()
-        (self.root / 'packages/.stash/creds.py').write_text('AWS_SECRET_ACCESS_KEY = "x"\n')
+        (self.root / 'packages/.stash/creds.py').write_text('AWS_SECRET_ACCESS_KEY = "x"\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'dot entries are not validated'):
             list(catalog.package_dirs('packages'))
 
     def test_reads_utf8_under_a_non_utf8_locale(self):
-        script = Path(catalog.__file__).resolve()
-        env = {**__import__('os').environ, 'PYTHONUTF8': '0', 'LC_ALL': 'C', 'LANG': 'C'}
-        r = subprocess.run([sys.executable, str(script), 'validate'],
-                           cwd=str(ROOT), capture_output=True, text=True, env=env)
+        # Exercise the command-line reader against a minimal fixture, not the
+        # checkout's maintainer approvals. The latter is a separate release-gate
+        # test and must not obscure this locale regression.
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp)
+            (fixture / 'tools').mkdir()
+            shutil.copy2(catalog.__file__, fixture / 'tools/catalog.py')
+            shutil.copytree(ROOT / 'schema', fixture / 'schema')
+            shutil.copytree(ROOT / 'examples', fixture / 'examples')
+            (fixture / 'packages').mkdir()
+            (fixture / 'reviews.json').write_text(
+                json.dumps({'schema_version': 1, 'approvals': []}), encoding='utf-8')
+            script = fixture / 'tools/catalog.py'
+            env = {**__import__('os').environ, 'PYTHONUTF8': '0', 'LC_ALL': 'C', 'LANG': 'C'}
+            r = subprocess.run([sys.executable, str(script), 'validate'],
+                               cwd=str(fixture), capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_unapproved_package_warns_but_passes(self):
@@ -219,17 +243,17 @@ class RobustnessTests(unittest.TestCase):
 
     def test_unpinned_or_ranged_requirement_is_rejected(self):
         for line in ('mcp>=1.0', 'mcp', 'git+https://example.com/x.git'):
-            (self.folder / 'src/requirements.txt').write_text(line + '\n')
+            (self.folder / 'src/requirements.txt').write_text(line + '\n', encoding='utf-8')
             with self.assertRaisesRegex(ValueError, 'exact package==version'):
                 catalog.validate(self.folder, False)
 
     def test_oversized_file_is_rejected(self):
-        (self.folder / 'src/big.py').write_text('#' + 'x' * (catalog.MAX_FILE_BYTES + 1))
+        (self.folder / 'src/big.py').write_text('#' + 'x' * (catalog.MAX_FILE_BYTES + 1), encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'File too large'):
             catalog.validate(self.folder, False)
 
     def test_notice_is_allowed(self):
-        (self.folder / 'NOTICE').write_text('upstream notice\n')
+        (self.folder / 'NOTICE').write_text('upstream notice\n', encoding='utf-8')
         meta, files = catalog.validate(self.folder, False)
         self.assertIn('NOTICE', {name for name, _ in files})
 
@@ -248,7 +272,7 @@ class RobustnessTests(unittest.TestCase):
         }
         for name, sample in samples.items():
             with self.subTest(name):
-                (self.folder / 'src/leak.py').write_text(f'# {sample}\n')
+                (self.folder / 'src/leak.py').write_text(f'# {sample}\n', encoding='utf-8')
                 with self.assertRaisesRegex(ValueError, 'secret/private'):
                     catalog.validate(self.folder, False)
 
@@ -260,14 +284,14 @@ class RobustnessTests(unittest.TestCase):
 
     def test_demo_build_writes_an_index_without_git(self):
         target = catalog.build(demo=True)
-        index = json.loads((target / 'index.json').read_text())
+        index = json.loads((target / 'index.json').read_text(encoding='utf-8'))
         self.assertEqual(index['channel'], 'local-demo')
         self.assertEqual(len(index['packages']), 1)
 
     def test_export_reviewed_writes_empty_index(self):
         self.ledger([])
         target = catalog.export_reviewed()
-        index = json.loads((target / 'index.json').read_text())
+        index = json.loads((target / 'index.json').read_text(encoding='utf-8'))
         self.assertEqual(index['channel'], 'reviewed-local')
         self.assertEqual(index['packages'], [])
 
@@ -509,7 +533,7 @@ class FromPaper2McpTests(unittest.TestCase):
 
     def test_missing_inventory_is_rejected(self):
         stripped = self.root / 'no-reports'
-        shutil.copytree(self.PROJECT, stripped)
+        shutil.copytree(self.PROJECT, stripped, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         (stripped / 'reports/expected-mcp-tools.json').unlink()
         r = self.run_converter('--project', str(stripped))
         self.assertNotEqual(r.returncode, 0)
@@ -531,7 +555,7 @@ class FromPaper2McpTests(unittest.TestCase):
 
     def make_project(self, name='project-copy'):
         copy = self.root / name
-        shutil.copytree(self.PROJECT, copy)
+        shutil.copytree(self.PROJECT, copy, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         return copy
 
     def test_r_route_material_is_refused(self):
@@ -542,7 +566,7 @@ class FromPaper2McpTests(unittest.TestCase):
         r = self.run_converter('--project', str(project))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('non-Python runtime material', r.stderr)
-        self.assertIn('src/r_scripts/demoqc.R', r.stderr)
+        self.assertIn(str(Path('src') / 'r_scripts' / 'demoqc.R'), r.stderr)
 
     def test_non_python_route_record_is_refused(self):
         project = self.make_project()
@@ -670,7 +694,7 @@ class AuditFindingTests(unittest.TestCase):
         meta.update(demo=False, repo_url='https://github.com/example/source', commit='a' * 40,
                     paper_title='Fixture', license='MIT')
         (self.folder / 'metadata.json').write_text(json.dumps(meta), encoding='utf-8')
-        (self.folder / 'LICENSE').write_text('MIT License\n\nPermission is hereby granted...\n')
+        (self.folder / 'LICENSE').write_text('MIT License\n\nPermission is hereby granted...\n', encoding='utf-8')
         write_validation(self.folder)
 
     def tearDown(self):
@@ -695,15 +719,15 @@ class AuditFindingTests(unittest.TestCase):
             catalog.validate(self.folder, False)
 
     def test_a_placeholder_licence_file_is_rejected(self):
-        (self.folder / 'LICENSE').write_text('To be determined.\n')
+        (self.folder / 'LICENSE').write_text('To be determined.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'LICENSE says'):
             catalog.validate(self.folder, False)
-        (self.folder / 'LICENSE').write_text('Placeholder licence.\n')
+        (self.folder / 'LICENSE').write_text('Placeholder licence.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'placeholder'):
             catalog.validate(self.folder, False)
 
     def test_a_licence_that_forbids_redistribution_is_rejected(self):
-        (self.folder / 'LICENSE').write_text('All rights reserved. Redistribution prohibited.\n')
+        (self.folder / 'LICENSE').write_text('All rights reserved. Redistribution prohibited.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'must permit redistribution'):
             catalog.validate(self.folder, False)
 

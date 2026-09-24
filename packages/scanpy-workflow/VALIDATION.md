@@ -43,6 +43,11 @@ removed them and the three real populations separated cleanly.
 Error path: `leiden_clusters` on a file with no neighbour graph was rejected rather than
 silently computing something. Tools that need a prior step check for it.
 
+The local regression harness also checks that output paths cannot overwrite an input or an
+existing file, that a clipped neighbour count is reported as the count actually used, and
+that marker ranking explicitly uses the preserved log-normalized layer instead of implicit
+`.raw` state. These checks were run after the package version was bumped to 0.1.2.
+
 ## What remains unverified
 
 - Agreement with any number reported in the paper. The dataset is synthetic; none of the

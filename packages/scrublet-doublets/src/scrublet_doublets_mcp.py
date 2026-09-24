@@ -45,10 +45,14 @@ def _in_path(path_str: str, suffix: str) -> Path:
     return path
 
 
-def _out_path(path_str: str, suffix: str) -> Path:
+def _out_path(path_str: str, suffix: str, input_path_str: str | None = None) -> Path:
     path = Path(path_str).expanduser()
     if path.suffix.lower() != suffix:
         raise ValueError(f"output_path must end in {suffix}")
+    if input_path_str is not None and path.resolve() == Path(input_path_str).expanduser().resolve():
+        raise ValueError("output_path must be different from h5ad_path; the input is never overwritten")
+    if path.exists():
+        raise ValueError(f"output_path already exists: {path}")
     return path
 
 
@@ -162,7 +166,7 @@ def detect_doublets(
     _check_parameters(expected_doublet_rate, sim_doublet_ratio, n_prin_comps, threshold)
     adata = _read_h5ad(h5ad_path)
     counts, source = _raw_counts(adata)
-    out = _out_path(output_path, ".h5ad")
+    out = _out_path(output_path, ".h5ad", h5ad_path)
     scrub, scores, calls = _run(
         counts, expected_doublet_rate, sim_doublet_ratio, n_prin_comps, random_state
     )
@@ -282,7 +286,7 @@ def score_distribution_plot(h5ad_path: str, output_path: str, dpi: int = 150) ->
         )
     if "doublet_score" not in adata.obs:
         raise ValueError("this file has no doublet_score column; run detect_doublets first")
-    out = _out_path(output_path, ".png")
+    out = _out_path(output_path, ".png", h5ad_path)
     counts, _ = _raw_counts(adata)
     scores = np.asarray(adata.obs["doublet_score"], dtype=np.float64)
     simulated = np.asarray(record["doublet_scores_sim"], dtype=np.float64)

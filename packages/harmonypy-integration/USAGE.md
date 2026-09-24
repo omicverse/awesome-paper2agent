@@ -71,6 +71,8 @@ configuration looks like:
 - Returns `n_cells`, `n_pcs`, `n_batches`, `batch_key`, `output_path` and the
   written file under `artifacts`. Unreadable files, a missing batch column, or
   mismatched row counts are rejected with a clear error.
+- The input tables are never modified. The output path must be new; an existing
+  output or an output path resolving to either input table is rejected.
 
 ### compute_lisi(embedding_path, metadata_path, label_key, output_path, perplexity=30)
 

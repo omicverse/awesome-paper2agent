@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "package_id": "harmonypy-integration",
-  "package_version": "0.1.0",
+  "package_version": "0.1.1",
   "name": "harmonypy integration tools",
   "summary": "Run Harmony batch-effect correction and LISI integration scoring on PCA embeddings with harmonypy 2.0.2.",
   "repo_url": "https://github.com/slowkow/harmonypy",

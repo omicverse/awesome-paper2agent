@@ -229,7 +229,11 @@ def archive(folder, demo=False):
             info.create_system = 3
             info.external_attr = 0o100644 << 16
             info.compress_type = zipfile.ZIP_DEFLATED
-            z.writestr(info, data)
+            # Git checkouts may materialize text files with LF or CRLF. The
+            # catalog is byte-pinned, so normalize at the archive boundary to
+            # keep approvals and release assets independent of checkout EOLs.
+            canonical = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+            z.writestr(info, canonical)
     data = out.getvalue()
     if len(data) > MAX_ZIP_BYTES:
         raise ValueError('Compressed size limit exceeded')

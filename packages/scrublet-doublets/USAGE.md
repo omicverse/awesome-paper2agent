@@ -34,7 +34,8 @@ and `evaluate_calls` read the file `detect_doublets` wrote; without it they refu
   rather than silently scored.
 - At least 50 cells are required for a neighbour graph; at most 200,000 cells and 60,000 genes.
 - The input is never modified. Tools that write take an explicit `output_path`; the others
-  return a dictionary and write nothing.
+  return a dictionary and write nothing. Output files must not already exist, and an output
+  path resolving to the input is rejected.
 - The nearest-neighbour search uses the exact scikit-learn path. The annoy-backed approximate
   path is not exposed: on the pinned annoy build it returned a fixed two-item neighbour list,
   which gave every cell the same score and left the threshold unset.

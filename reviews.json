@@ -3,27 +3,27 @@
   "approvals": [
     {
       "package_id": "harmonypy-integration",
-      "package_version": "0.1.0",
-      "content_sha256": "5d751f2e4e70a0b000be2c48d9f23e54052d07dea143abb7c50fc3c2da7cd1f9",
-      "submitted_by": "mengxu98",
+      "package_version": "0.1.1",
+      "content_sha256": "3f5930608da9fdbee8199b51c388d8ba6b4517215e88e6ea5b6f38a7cb0529c8",
+      "submitted_by": "hurry060215-tech",
       "reviewed_by": "mengxu98",
-      "reviewed_at": "2026-09-21"
+      "reviewed_at": "2026-09-23"
     },
     {
       "package_id": "scanpy-workflow",
-      "package_version": "0.1.1",
-      "content_sha256": "ecc672e9da1ee0a10fd504d5e9a648cea77051a97d539ff27479fb32f3a1d6c2",
-      "submitted_by": "mengxu98",
+      "package_version": "0.1.2",
+      "content_sha256": "ca72a747501854ab2c72b3ed40517db5f7e6414a3721e427037ee2f0b6c98c2c",
+      "submitted_by": "hurry060215-tech",
       "reviewed_by": "mengxu98",
-      "reviewed_at": "2026-09-21"
+      "reviewed_at": "2026-09-23"
     },
     {
       "package_id": "scrublet-doublets",
-      "package_version": "0.1.1",
-      "content_sha256": "4d2471c8ecf23be978bb215f402d31eea45a0f56d606702030b50c38df6711fc",
-      "submitted_by": "mengxu98",
+      "package_version": "0.1.2",
+      "content_sha256": "5de918fd61276e4029bf7a1679bc833f9c0993a2a87f41c32f7ecb86e21bebd6",
+      "submitted_by": "hurry060215-tech",
       "reviewed_by": "mengxu98",
-      "reviewed_at": "2026-09-21"
+      "reviewed_at": "2026-09-23"
     }
   ]
 }

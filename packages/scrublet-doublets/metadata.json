@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "package_id": "scrublet-doublets",
-  "package_version": "0.1.1",
+  "package_version": "0.1.2",
   "name": "Scrublet Doublets",
   "summary": "模拟双细胞并给每个细胞打双细胞分数：Scrublet 的检测、阈值扫描、分数分布图，以及与已知标注的比对。",
   "repo_url": "https://github.com/swolock/scrublet",

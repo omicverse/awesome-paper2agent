@@ -21,6 +21,10 @@ Paper: Wolf, Angerer & Theis, *Genome Biology* 19, 15 (2018), doi:10.1186/s13059
 They are meant to be called in that order: `pca_neighbors` before `leiden_clusters` and
 `umap_embedding` (both refuse a file with no neighbour graph), and `rank_genes` on the
 clustered file. Every tool reads one file and writes a new one; the input is never modified.
+Output paths must be new `.h5ad` files; an existing output or an output path that resolves
+to the input is rejected rather than overwritten. `normalize_hvg` keeps its log-normalized
+matrix in `layers["log_normalized"]`; `rank_genes` uses that layer explicitly when it is
+present and never implicitly selects `.raw`.
 
 ## Inputs, limits, and what it does not do
 

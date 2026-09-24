@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 MAX_CELLS = 200_000
 MAX_GENES = 60_000
 DEFAULT_MITO_PREFIX = "MT-"
+LOG_LAYER = "log_normalized"
 
 mcp = FastMCP("Scanpy Workflow")
 
@@ -32,10 +33,14 @@ def _read(path_str: str):
     return adata
 
 
-def _out(path_str: str):
+def _out(path_str: str, input_path_str: str):
     out = Path(path_str).expanduser()
     if out.suffix.lower() != ".h5ad":
         raise ValueError("output_path must end in .h5ad")
+    if out.resolve() == Path(input_path_str).expanduser().resolve():
+        raise ValueError("output_path must be different from h5ad_path; the input is never overwritten")
+    if out.exists():
+        raise ValueError(f"output_path already exists: {out}")
     return out
 
 
@@ -74,7 +79,7 @@ def filter_cells(
     """Drop cells with too few detected genes or too much mitochondrial content."""
     if min_genes < 0 or not 0 <= max_pct_mt <= 100:
         raise ValueError("min_genes must be >= 0 and max_pct_mt between 0 and 100")
-    out = _out(output_path)
+    out = _out(output_path, h5ad_path)
     adata = _add_qc(_read(h5ad_path), mito_prefix)
     before = int(adata.n_obs)
     sc.pp.filter_cells(adata, min_genes=min_genes)
@@ -97,12 +102,15 @@ def normalize_hvg(
     """Normalise counts per cell, log-transform, and select highly variable genes."""
     if n_top_genes < 10:
         raise ValueError("n_top_genes must be at least 10")
-    out = _out(output_path)
+    out = _out(output_path, h5ad_path)
     adata = _read(h5ad_path)
     if "counts" not in adata.layers:
         adata.layers["counts"] = adata.X.copy()
     sc.pp.normalize_total(adata, target_sum=target_sum)
     sc.pp.log1p(adata)
+    # pca_neighbors scales X in place; preserve the explicit log-normalized
+    # matrix so rank_genes does not depend on hidden .raw state.
+    adata.layers[LOG_LAYER] = adata.X.copy()
     before = int(adata.n_vars)
     sc.pp.highly_variable_genes(adata, n_top_genes=min(n_top_genes, adata.n_vars))
     if int(adata.var["highly_variable"].sum()) == 0:
@@ -124,17 +132,18 @@ def pca_neighbors(
     """Scale the data, run PCA, and build the neighbour graph clustering needs."""
     if n_pcs < 2 or n_neighbors < 2:
         raise ValueError("n_pcs and n_neighbors must be at least 2")
-    out = _out(output_path)
+    out = _out(output_path, h5ad_path)
     adata = _read(h5ad_path)
     sc.pp.scale(adata, max_value=10)
     n_comps = min(n_pcs, max(2, adata.n_vars - 1), max(2, adata.n_obs - 1))
     sc.tl.pca(adata, n_comps=n_comps, svd_solver="arpack", random_state=random_state)
-    sc.pp.neighbors(adata, n_neighbors=min(n_neighbors, max(2, adata.n_obs - 1)),
+    n_neighbors_used = min(n_neighbors, max(2, adata.n_obs - 1))
+    sc.pp.neighbors(adata, n_neighbors=n_neighbors_used,
                     n_pcs=n_comps, random_state=random_state)
     out.parent.mkdir(parents=True, exist_ok=True)
     adata.write_h5ad(out)
     variance = adata.uns["pca"]["variance_ratio"]
-    return {"n_pcs": int(n_comps), "n_neighbors": int(n_neighbors),
+    return {"n_pcs": int(n_comps), "n_neighbors": int(n_neighbors_used),
             "variance_ratio_first": float(variance[0]),
             "variance_ratio_sum": float(variance.sum()), "output": out.name}
 
@@ -149,7 +158,7 @@ def leiden_clusters(
     """Cluster the neighbour graph with Leiden and record the labels."""
     if resolution <= 0:
         raise ValueError("resolution must be positive")
-    out = _out(output_path)
+    out = _out(output_path, h5ad_path)
     adata = _read(h5ad_path)
     if "neighbors" not in adata.uns:
         raise ValueError("run pca_neighbors first: this file has no neighbour graph")
@@ -167,7 +176,7 @@ def umap_embedding(h5ad_path: str, output_path: str, random_state: int = 0, min_
     """Compute a UMAP embedding from the neighbour graph."""
     if not 0 < min_dist <= 1:
         raise ValueError("min_dist must be in (0, 1]")
-    out = _out(output_path)
+    out = _out(output_path, h5ad_path)
     adata = _read(h5ad_path)
     if "neighbors" not in adata.uns:
         raise ValueError("run pca_neighbors first: this file has no neighbour graph")
@@ -188,7 +197,9 @@ def rank_genes(h5ad_path: str, groupby: str = "cluster", top_n: int = 5) -> dict
     adata = _read(h5ad_path)
     if groupby not in adata.obs:
         raise ValueError(f"`{groupby}` is not a column of obs")
-    sc.tl.rank_genes_groups(adata, groupby=groupby, method="wilcoxon")
+    layer = LOG_LAYER if LOG_LAYER in adata.layers else None
+    sc.tl.rank_genes_groups(adata, groupby=groupby, method="wilcoxon",
+                            layer=layer, use_raw=False)
     names = adata.uns["rank_genes_groups"]["names"]
     groups = list(adata.obs[groupby].cat.categories) if hasattr(adata.obs[groupby], "cat") else sorted(set(adata.obs[groupby]))
     return {"groupby": groupby, "n_groups": len(groups),

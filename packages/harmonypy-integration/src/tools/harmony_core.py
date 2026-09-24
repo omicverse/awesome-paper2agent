@@ -65,9 +65,20 @@ def _check_row_counts(matrix, labels, embedding_what, metadata_what):
         )
 
 
+def _prepare_output(output_path, input_paths):
+    output = pathlib.Path(output_path).expanduser()
+    resolved_output = output.resolve()
+    for input_path in input_paths:
+        if resolved_output == pathlib.Path(input_path).expanduser().resolve():
+            raise ValueError("output_path must be different from the input path; inputs are never overwritten")
+    if output.exists():
+        raise ValueError(f"output_path already exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    return output
+
+
 def _write_tsv(frame, output_path):
     output = pathlib.Path(output_path).expanduser()
-    output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, sep="\t", index=False)
     return output.resolve()
 
@@ -104,6 +115,7 @@ def run_harmony(
     batch_labels = _require_column(metadata, batch_key, "metadata table")
     columns, matrix = _embedding_matrix(pcs, "pcs_path")
     _check_row_counts(matrix, batch_labels, "pcs_path", "metadata_path")
+    output = _prepare_output(output_path, (pcs_path, metadata_path))
 
     harmony_result = harmonypy.run_harmony(
         matrix,
@@ -115,7 +127,7 @@ def run_harmony(
         verbose=False,
     )
     corrected = np.asarray(harmony_result.Z_corr, dtype=np.float64)
-    output = _write_tsv(pd.DataFrame(corrected, columns=columns), output_path)
+    output = _write_tsv(pd.DataFrame(corrected, columns=columns), output)
     return {
         "n_cells": int(corrected.shape[0]),
         "n_pcs": int(corrected.shape[1]),
@@ -161,9 +173,10 @@ def compute_lisi(
     _check_row_counts(matrix, labels, "embedding_path", "metadata_path")
     if perplexity <= 0:
         raise ValueError("perplexity must be greater than 0")
+    output = _prepare_output(output_path, (embedding_path, metadata_path))
 
     lisi = np.asarray(harmonypy.compute_lisi(matrix, metadata, [label_key], perplexity)).ravel()
-    output = _write_tsv(pd.DataFrame({f"lisi_{label_key}": lisi}), output_path)
+    output = _write_tsv(pd.DataFrame({f"lisi_{label_key}": lisi}), output)
     return {
         "n_cells": int(lisi.size),
         "n_labels": int(pd.unique(labels).size),

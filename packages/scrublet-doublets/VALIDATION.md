@@ -111,6 +111,9 @@ Two failures changed the package while building it, both recorded rather than sm
    The tools therefore pass `use_approx_neighbors=False` (scikit-learn's exact search) and do not
    expose the approximate path.
 
+The 0.1.2 local regression run additionally exercised input/output protection: an input path or
+an existing output path is rejected before writing, and the input SHA256 remained unchanged.
+
 Two degenerate inputs were also pushed through the server, because neither path appears in a
 normal run:
 
