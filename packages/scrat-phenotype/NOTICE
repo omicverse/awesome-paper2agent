@@ -1,0 +1,16 @@
+ScRAT phenotype MCP package
+===========================
+
+Paper: Mao et al., "Phenotype prediction from single-cell RNA-seq data using
+attention-based neural networks", Bioinformatics 40(2), btae067 (2024),
+doi:10.1093/bioinformatics/btae067.
+
+Reference implementation: https://github.com/yuzhenmao/ScRAT
+Reference commit: cbf07723233e2bac0a62be667dbda29a7afe06cd
+
+This package is an independent implementation of the equations and workflow
+published in the paper. No files from the reference repository are redistributed
+here. The reference repository contains no license file at the pinned commit;
+this NOTICE does not assert rights to redistribute that repository's code.
+
+The new package source is distributed under Apache-2.0; see LICENSE.

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "package_id": "scrat-phenotype",
+  "package_version": "0.1.0",
+  "name": "ScRAT single-cell phenotype prediction",
+  "summary": "Train and apply ScRAT attention models for binary patient phenotypes from H5AD data, including cell-type-aware mixup and HOV/R-score interpretation.",
+  "repo_url": "https://github.com/yuzhenmao/ScRAT",
+  "commit": "cbf07723233e2bac0a62be667dbda29a7afe06cd",
+  "doi": "10.1093/bioinformatics/btae067",
+  "paper_title": "Phenotype prediction from single-cell RNA-seq data using attention-based neural networks",
+  "tools": [
+    "scrat_mixup",
+    "scrat_train",
+    "scrat_predict"
+  ],
+  "python": "3.12",
+  "license": "Apache-2.0",
+  "demo": false
+}

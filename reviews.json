@@ -24,6 +24,14 @@
       "submitted_by": "hurry060215-tech",
       "reviewed_by": "mengxu98",
       "reviewed_at": "2026-09-23"
+    },
+    {
+      "package_id": "scrat-phenotype",
+      "package_version": "0.1.0",
+      "content_sha256": "4b3089e9cc59d413bdff5e042f5fa8c34c28e98f91dd4d8b3f5ec09c14008499",
+      "submitted_by": "chymlltrn",
+      "reviewed_by": "mengxu98",
+      "reviewed_at": "2026-11-12"
     }
   ]
 }
